@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import webbrowser
 
 import uvicorn
+
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
 
 def _open_browser(url: str) -> None:

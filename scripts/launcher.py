@@ -127,56 +127,64 @@ class SplashLauncher:
         self.root.mainloop()
 
     def _workflow(self) -> None:
-        # 1. Comprobar y desplegar actualizaciones desde GitHub
-        self.set_status("Comprobando actualizaciones...", "Conectando con GitHub...")
-        check = check_for_updates()
-        if check.get("ok") and check.get("has_update"):
-            self.set_status(
-                "Descargando actualización...",
-                f"Nueva versión detectada ({check['remote_sha'][:7]}). Desplegando...",
-            )
-            res = download_and_deploy_update(
-                remote_sha=check["remote_sha"],
-                repo=check["repo"],
-                branch=check["branch"],
-                token=check.get("token", ""),
-            )
-            if res.get("ok"):
+        try:
+            # 1. Comprobar y desplegar actualizaciones desde GitHub
+            self.set_status("Comprobando actualizaciones...", "Conectando con GitHub...")
+            check = check_for_updates()
+            if check.get("ok") and check.get("has_update"):
                 self.set_status(
-                    "Aplicación actualizada",
-                    f"Desplegados {res.get('updated_files', 0)} archivos correctamente.",
+                    "Descargando actualización...",
+                    f"Nueva versión detectada ({check['remote_sha'][:7]}). Desplegando...",
                 )
-                time.sleep(0.9)
+                res = download_and_deploy_update(
+                    remote_sha=check["remote_sha"],
+                    repo=check["repo"],
+                    branch=check["branch"],
+                    token=check.get("token", ""),
+                )
+                if res.get("ok"):
+                    self.set_status(
+                        "Aplicación actualizada",
+                        f"Desplegados {res.get('updated_files', 0)} archivos correctamente.",
+                    )
+                    time.sleep(0.9)
+                else:
+                    self.set_status("Aviso de actualización", res.get("error", "Continuando con versión local"))
+                    time.sleep(1.2)
+            elif check.get("ok"):
+                self.set_status("Aplicación al día", "No hay cambios nuevos en GitHub.")
+                time.sleep(0.4)
             else:
-                self.set_status("Aviso de actualización", res.get("error", "Continuando con versión local"))
-                time.sleep(1.2)
-        elif check.get("ok"):
-            self.set_status("Aplicación al día", "No hay cambios nuevos en GitHub.")
-            time.sleep(0.4)
-        else:
-            self.set_status("Iniciando sin conexión a GitHub", check.get("error", ""))
-            time.sleep(0.6)
+                self.set_status("Iniciando sin conexión a GitHub", check.get("error", ""))
+                time.sleep(0.6)
 
-        # 2. Arrancar servidor local si no está ya corriendo
-        if not _is_server_alive():
-            self.set_status("Iniciando servidor local...", f"Arrancando en {SERVER_URL}")
-            env = os.environ.copy()
-            env["LICITALL_NO_BROWSER"] = "1"
-            subprocess.Popen(
-                [_get_python_gui_executable(), str(BASE_DIR / "run.py")],
-                cwd=str(BASE_DIR),
-                env=env,
-                creationflags=WIN_NO_WINDOW,
-            )
-            for _ in range(40):
-                if _is_server_alive():
-                    break
-                time.sleep(0.25)
+            # 2. Arrancar servidor local si no está ya corriendo
+            if not _is_server_alive():
+                self.set_status("Iniciando servidor local...", f"Arrancando en {SERVER_URL}")
+                env = os.environ.copy()
+                env["LICITALL_NO_BROWSER"] = "1"
+                log_fh = open(BASE_DIR / "sync_update.log", "a", encoding="utf-8")
+                subprocess.Popen(
+                    [_get_python_gui_executable(), str(BASE_DIR / "run.py")],
+                    cwd=str(BASE_DIR),
+                    env=env,
+                    stdout=log_fh,
+                    stderr=log_fh,
+                    creationflags=WIN_NO_WINDOW,
+                )
+                for _ in range(40):
+                    if _is_server_alive():
+                        break
+                    time.sleep(0.25)
 
-        # 3. Abrir en el navegador predeterminado y cerrar splash
-        webbrowser.open(SERVER_URL)
-        time.sleep(0.3)
-        self.close()
+            # 3. Abrir en el navegador predeterminado y cerrar splash
+            webbrowser.open(SERVER_URL)
+            time.sleep(0.3)
+        except Exception as exc:
+            self.set_status("Error al iniciar LicitAll", str(exc))
+            time.sleep(3.5)
+        finally:
+            self.close()
 
 
 if __name__ == "__main__":
