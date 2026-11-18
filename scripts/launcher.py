@@ -91,7 +91,7 @@ class SplashLauncher:
         tk.Label(
             body,
             text=f"Portal de Descubrimiento de Licitaciones · v{self.version}",
-            font=("Segoe UI", 9.5),
+            font=("Segoe UI", 10),
             fg="#64748b",
             bg="#ffffff",
         ).pack(anchor="w", pady=(2, 18))
@@ -100,7 +100,7 @@ class SplashLauncher:
         tk.Label(
             body,
             textvariable=self.status_var,
-            font=("Segoe UI", 10.5, "bold"),
+            font=("Segoe UI", 11, "bold"),
             fg="#0f172a",
             bg="#ffffff",
         ).pack(anchor="w")
