@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Optional
 
-from app.connectors.base import clean_text, compute_hash, extract_cpvs, make_client, normalize_date, parse_float
+from app.connectors.base import clean_text, compute_hash, extract_cpvs, http_post_json, normalize_date, parse_float
 from app.models import TenderRecord
 
 TED_SEARCH_URL = "https://api.ted.europa.eu/v3/notices/search"
@@ -146,30 +146,29 @@ async def fetch_ted_spain(
         "links",
     ]
 
-    async with make_client(timeout=30.0) as client:
-        for page in range(1, max_pages + 1):
-            if page > 1:
-                await asyncio.sleep(0.8)
-            body = {
-                "query": query,
-                "fields": fields,
-                "page": page,
-                "limit": page_size,
-                "scope": "ACTIVE",
-            }
-            resp = await client.post(TED_SEARCH_URL, json=body)
-            if resp.status_code == 429:
-                if all_records:
-                    break
-                await asyncio.sleep(2.5)
-                resp = await client.post(TED_SEARCH_URL, json=body)
+    for page in range(1, max_pages + 1):
+        if page > 1:
+            await asyncio.sleep(0.8)
+        body = {
+            "query": query,
+            "fields": fields,
+            "page": page,
+            "limit": page_size,
+            "scope": "ACTIVE",
+        }
+        resp = await http_post_json(TED_SEARCH_URL, body, timeout=30.0)
+        if resp.status_code == 429:
+            if all_records:
+                break
+            await asyncio.sleep(2.5)
+            resp = await http_post_json(TED_SEARCH_URL, body, timeout=30.0)
             resp.raise_for_status()
-            data = resp.json()
-            page_records = parse_ted_response(data)
-            if not page_records:
-                break
-            all_records.extend(page_records)
-            if len(page_records) < page_size:
-                break
+        data = resp.json()
+        page_records = parse_ted_response(data)
+        if not page_records:
+            break
+        all_records.extend(page_records)
+        if len(page_records) < page_size:
+            break
 
     return all_records

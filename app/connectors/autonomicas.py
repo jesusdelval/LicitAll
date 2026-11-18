@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from app.connectors.base import clean_text, compute_hash, extract_cpvs, make_client, normalize_date, parse_float
+from app.connectors.base import clean_text, compute_hash, extract_cpvs, http_get, normalize_date, parse_float
 from app.models import TenderRecord
 
 CATALUNA_SOCRATA_URL = "https://analisi.transparenciacatalunya.cat/resource/ybgg-dgi6.json"
@@ -89,23 +89,21 @@ async def fetch_cataluna(
         where_parts.append(f"data_publicacio_anunci <= '{date_to}T23:59:59'")
 
     all_records: list[TenderRecord] = []
-    async with make_client(timeout=35.0) as client:
-        for page in range(max_pages):
-            params: dict[str, str] = {
-                "$limit": str(limit),
-                "$offset": str(page * limit),
-                "$order": "data_publicacio_anunci DESC",
-            }
-            if where_parts:
-                params["$where"] = " AND ".join(where_parts)
-            resp = await client.get(CATALUNA_SOCRATA_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-            if not isinstance(data, list) or not data:
-                break
-            all_records.extend(parse_cataluna_rows(data))
-            if len(data) < limit:
-                break
+    for page in range(max_pages):
+        params: dict[str, str] = {
+            "$limit": str(limit),
+            "$offset": str(page * limit),
+            "$order": "data_publicacio_anunci DESC",
+        }
+        if where_parts:
+            params["$where"] = " AND ".join(where_parts)
+        resp = await http_get(CATALUNA_SOCRATA_URL, params=params, timeout=35.0)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            break
+        all_records.extend(parse_cataluna_rows(data))
+        if len(data) < limit:
+            break
     return all_records
 
 
@@ -191,11 +189,9 @@ def parse_navarra_rows(data: Any, source: str = "navarra") -> list[TenderRecord]
 
 async def fetch_navarra(limit: int = 300) -> list[TenderRecord]:
     """Fetch current year's tenders from Navarra Open Data JSON dump."""
-    async with make_client(timeout=35.0) as client:
-        resp = await client.get(NAVARRA_DUMP_URL)
-        resp.raise_for_status()
-        records = parse_navarra_rows(resp.json())
-        return records[:limit]
+    resp = await http_get(NAVARRA_DUMP_URL, timeout=35.0)
+    records = parse_navarra_rows(resp.json())
+    return records[:limit]
 
 
 def parse_euskadi_rows(data: Any, source: str = "euskadi") -> list[TenderRecord]:
@@ -258,7 +254,5 @@ def parse_euskadi_rows(data: Any, source: str = "euskadi") -> list[TenderRecord]
 
 async def fetch_euskadi(page_size: int = 100) -> list[TenderRecord]:
     """Fetch recent contracting notices from País Vasco KontratazioA REST API."""
-    async with make_client(timeout=30.0) as client:
-        resp = await client.get(EUSKADI_NOTICES_URL, params={"_pageSize": str(page_size)})
-        resp.raise_for_status()
-        return parse_euskadi_rows(resp.json())
+    resp = await http_get(EUSKADI_NOTICES_URL, params={"_pageSize": str(page_size)}, timeout=30.0)
+    return parse_euskadi_rows(resp.json())

@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import hashlib
 import json
+import os
 import re
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from typing import Any, Optional
@@ -13,6 +21,7 @@ import httpx
 
 USER_AGENT = "LicitAll/1.0 (+https://localhost)"
 DEFAULT_TIMEOUT = 25.0
+WIN_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
 def clean_text(value: Any) -> str:
@@ -108,10 +117,128 @@ def compute_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+def _detect_system_proxy() -> Optional[str]:
+    """Detect explicit HTTP/HTTPS proxy from environment or Windows registry."""
+    proxies = urllib.request.getproxies()
+    return proxies.get("https") or proxies.get("http") or None
+
+
 def make_client(timeout: float = DEFAULT_TIMEOUT) -> httpx.AsyncClient:
-    """Create a configured async HTTP client."""
-    return httpx.AsyncClient(
-        timeout=httpx.Timeout(timeout, connect=10.0),
-        follow_redirects=True,
-        headers={"User-Agent": USER_AGENT},
+    """Create a configured async HTTP client using system proxy if available."""
+    proxy = _detect_system_proxy()
+    kwargs: dict[str, Any] = {
+        "timeout": httpx.Timeout(timeout, connect=12.0),
+        "follow_redirects": True,
+        "headers": {"User-Agent": USER_AGENT},
+    }
+    if proxy:
+        kwargs["proxy"] = proxy
+    return httpx.AsyncClient(**kwargs)
+
+
+@dataclass
+class SimpleResponse:
+    """Lightweight HTTP response wrapper compatible across httpx and PowerShell fallback."""
+
+    status_code: int
+    text: str
+
+    def json(self) -> Any:
+        return json.loads(self.text)
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError(
+                f"HTTP {self.status_code}",
+                request=httpx.Request("GET", "https://localhost"),
+                response=httpx.Response(self.status_code, text=self.text),
+            )
+
+
+def _powershell_request(
+    method: str,
+    url: str,
+    json_body: Optional[dict[str, Any]] = None,
+    timeout: float = 35.0,
+) -> SimpleResponse:
+    """Execute HTTP request via Windows PowerShell using corporate PAC/WPAD proxy + SSO."""
+    ps_script = """
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $OutputEncoding = [System.Text.Encoding]::UTF8
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $wc = New-Object System.Net.WebClient
+        $wc.Encoding = [System.Text.Encoding]::UTF8
+        $wc.Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
+        $wc.Proxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
+        $wc.Headers.Add('User-Agent', 'LicitAll/1.0')
+        if ($env:LA_METHOD -eq 'POST') {
+            $wc.Headers.Add('Content-Type', 'application/json')
+            $respBytes = $wc.UploadData($env:LA_URL, 'POST', [System.Text.Encoding]::UTF8.GetBytes($env:LA_BODY))
+        } else {
+            $respBytes = $wc.DownloadData($env:LA_URL)
+        }
+        Write-Output ([Convert]::ToBase64String($respBytes))
+    } catch {
+        [Console]::Error.WriteLine($_.Exception.Message)
+        exit 1
+    }
+    """
+    env = os.environ.copy()
+    env["LA_METHOD"] = method
+    env["LA_URL"] = url
+    env["LA_BODY"] = json.dumps(json_body) if json_body is not None else ""
+
+    res = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", ps_script],
+        capture_output=True,
+        text=True,
+        timeout=max(int(timeout) + 10, 40),
+        env=env,
+        creationflags=WIN_NO_WINDOW,
     )
+    if res.returncode != 0 or not res.stdout.strip():
+        raise httpx.ConnectError(res.stderr.strip() or f"Error de conexión vía proxy para {url}")
+    raw_bytes = base64.b64decode(res.stdout.strip())
+    return SimpleResponse(status_code=200, text=raw_bytes.decode("utf-8", errors="replace"))
+
+
+async def http_get(
+    url: str,
+    params: Optional[dict[str, str]] = None,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> SimpleResponse:
+    """GET URL with httpx, falling back to Windows system proxy (PAC/WPAD) on ConnectError."""
+    full_url = url
+    if params:
+        sep = "&" if "?" in url else "?"
+        full_url = f"{url}{sep}{urllib.parse.urlencode(params)}"
+
+    try:
+        async with make_client(timeout=timeout) as client:
+            resp = await client.get(full_url)
+            resp.raise_for_status()
+            return SimpleResponse(status_code=resp.status_code, text=resp.text)
+    except (httpx.ConnectError, httpx.ProxyError):
+        if sys.platform != "win32":
+            raise
+        return await asyncio.to_thread(_powershell_request, "GET", full_url, None, timeout)
+
+
+async def http_post_json(
+    url: str,
+    json_body: dict[str, Any],
+    timeout: float = DEFAULT_TIMEOUT,
+) -> SimpleResponse:
+    """POST JSON with httpx, falling back to Windows system proxy (PAC/WPAD) on ConnectError."""
+    try:
+        async with make_client(timeout=timeout) as client:
+            resp = await client.post(url, json=json_body)
+            if resp.status_code == 429:
+                return SimpleResponse(status_code=429, text=resp.text)
+            resp.raise_for_status()
+            return SimpleResponse(status_code=resp.status_code, text=resp.text)
+    except (httpx.ConnectError, httpx.ProxyError):
+        if sys.platform != "win32":
+            raise
+        return await asyncio.to_thread(_powershell_request, "POST", url, json_body, timeout)

@@ -8,7 +8,7 @@ import re
 from typing import Any, Optional
 import xml.etree.ElementTree as ET
 
-from app.connectors.base import clean_text, compute_hash, make_client, normalize_date, parse_float
+from app.connectors.base import clean_text, compute_hash, http_get, normalize_date, parse_float
 from app.models import TenderRecord
 
 IFEMA_URL = "https://licitaciones2.ifema.es/licitacion/licitaciones/?filtropred=ultimos-publicados"
@@ -130,10 +130,8 @@ def parse_ifema_html(html_text: str, source: str = "ifema") -> list[TenderRecord
 
 async def fetch_ifema() -> list[TenderRecord]:
     """Fetch recent tenders from IFEMA Madrid."""
-    async with make_client(timeout=25.0) as client:
-        resp = await client.get(IFEMA_URL)
-        resp.raise_for_status()
-        return parse_ifema_html(resp.text)
+    resp = await http_get(IFEMA_URL, timeout=25.0)
+    return parse_ifema_html(resp.text)
 
 
 def parse_asturias_html(html_text: str, source: str = "asturias") -> list[TenderRecord]:
@@ -198,10 +196,8 @@ def parse_asturias_html(html_text: str, source: str = "asturias") -> list[Tender
 
 async def fetch_asturias() -> list[TenderRecord]:
     """Fetch open minor-contract offers from Principado de Asturias."""
-    async with make_client(timeout=25.0) as client:
-        resp = await client.get(ASTURIAS_MENORES_URL)
-        resp.raise_for_status()
-        return parse_asturias_html(resp.text)
+    resp = await http_get(ASTURIAS_MENORES_URL, timeout=25.0)
+    return parse_asturias_html(resp.text)
 
 
 def _extract_labeled_field(content_text: str, label: str) -> str:
@@ -265,10 +261,8 @@ def parse_andalucia_atom(xml_text: str, source: str = "andalucia") -> list[Tende
 
 async def fetch_andalucia() -> list[TenderRecord]:
     """Fetch recent tenders from Junta de Andalucía ATOM feed."""
-    async with make_client(timeout=30.0) as client:
-        resp = await client.get(ANDALUCIA_ATOM_URL)
-        resp.raise_for_status()
-        return parse_andalucia_atom(resp.text)
+    resp = await http_get(ANDALUCIA_ATOM_URL, timeout=30.0)
+    return parse_andalucia_atom(resp.text)
 
 
 def parse_zaragoza_item(item: dict[str, Any], source: str = "zaragoza") -> Optional[TenderRecord]:
@@ -319,19 +313,18 @@ def parse_zaragoza_item(item: dict[str, Any], source: str = "zaragoza") -> Optio
 
 async def fetch_zaragoza(limit: int = 50) -> list[TenderRecord]:
     """Fetch recent tenders from Ayuntamiento de Zaragoza via list IDs + item JSON."""
-    async with make_client(timeout=25.0) as client:
-        resp = await client.get(ZARAGOZA_LIST_URL)
-        resp.raise_for_status()
-        ids = list(dict.fromkeys(re.findall(r"/sede/servicio/contratacion-publica/(\d+)", resp.text)))[:limit]
+    resp = await http_get(ZARAGOZA_LIST_URL, timeout=25.0)
+    ids = list(dict.fromkeys(re.findall(r"/sede/servicio/contratacion-publica/(\d+)", resp.text)))[:limit]
 
-        sem = asyncio.Semaphore(8)
+    sem = asyncio.Semaphore(8)
 
-        async def _get_one(tid: str) -> Optional[TenderRecord]:
-            async with sem:
-                r = await client.get(ZARAGOZA_ITEM_URL.format(item_id=tid))
-                if r.status_code != 200:
-                    return None
+    async def _get_one(tid: str) -> Optional[TenderRecord]:
+        async with sem:
+            try:
+                r = await http_get(ZARAGOZA_ITEM_URL.format(item_id=tid), timeout=20.0)
                 return parse_zaragoza_item(r.json())
+            except Exception:
+                return None
 
-        results = await asyncio.gather(*[_get_one(tid) for tid in ids], return_exceptions=True)
-        return [res for res in results if isinstance(res, TenderRecord)]
+    results = await asyncio.gather(*[_get_one(tid) for tid in ids], return_exceptions=True)
+    return [res for res in results if isinstance(res, TenderRecord)]

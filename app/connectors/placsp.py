@@ -11,7 +11,7 @@ from app.connectors.base import (
     compute_hash,
     extract_cpvs,
     extract_date_day,
-    make_client,
+    http_get,
     normalize_date,
     parse_float,
 )
@@ -205,36 +205,34 @@ async def fetch_atom_source(
     all_records: list[TenderRecord] = []
     current_url: Optional[str] = feed_url
 
-    async with make_client(timeout=60.0) as client:
-        for _ in range(max_pages):
-            if not current_url:
+    for _ in range(max_pages):
+        if not current_url:
+            break
+        try:
+            resp = await http_get(current_url, timeout=60.0)
+        except Exception:
+            if all_records:
                 break
-            try:
-                resp = await client.get(current_url)
-                resp.raise_for_status()
-            except Exception:
-                if all_records:
-                    break
-                raise
-            page_records, next_url = await asyncio.to_thread(
-                parse_atom_feed, resp.text, source, region
-            )
-            if not page_records:
+            raise
+        page_records, next_url = await asyncio.to_thread(
+            parse_atom_feed, resp.text, source, region
+        )
+        if not page_records:
+            break
+
+        all_records.extend(page_records)
+
+        if date_from:
+            page_days = [
+                d
+                for r in page_records
+                if (d := extract_date_day(r.updated_at or r.published_at)) is not None
+            ]
+            if page_days and max(page_days) < date_from:
                 break
 
-            all_records.extend(page_records)
-
-            if date_from:
-                page_days = [
-                    d
-                    for r in page_records
-                    if (d := extract_date_day(r.updated_at or r.published_at)) is not None
-                ]
-                if page_days and max(page_days) < date_from:
-                    break
-
-            if not next_url or next_url == current_url:
-                break
-            current_url = next_url
+        if not next_url or next_url == current_url:
+            break
+        current_url = next_url
 
     return all_records
