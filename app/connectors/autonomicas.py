@@ -189,7 +189,7 @@ def parse_navarra_rows(data: Any, source: str = "navarra") -> list[TenderRecord]
 
 async def fetch_navarra(limit: int = 300) -> list[TenderRecord]:
     """Fetch current year's tenders from Navarra Open Data JSON dump."""
-    resp = await http_get(NAVARRA_DUMP_URL, timeout=35.0)
+    resp = await http_get(NAVARRA_DUMP_URL, timeout=90.0)
     records = parse_navarra_rows(resp.json())
     return records[:limit]
 

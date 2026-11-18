@@ -19,7 +19,10 @@ from typing import Any, Optional
 
 import httpx
 
-USER_AGENT = "LicitAll/1.0 (+https://localhost)"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
 DEFAULT_TIMEOUT = 25.0
 WIN_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
@@ -171,7 +174,9 @@ def _powershell_request(
         $wc.Encoding = [System.Text.Encoding]::UTF8
         $wc.Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
         $wc.Proxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
-        $wc.Headers.Add('User-Agent', 'LicitAll/1.0')
+        $wc.Headers.Add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36')
+        $wc.Headers.Add('Accept', 'application/atom+xml,application/xml,application/json,text/html,*/*')
+        $wc.Headers.Add('Accept-Language', 'es-ES,es;q=0.9')
         if ($env:LA_METHOD -eq 'POST') {
             $wc.Headers.Add('Content-Type', 'application/json')
             $respBytes = $wc.UploadData($env:LA_URL, 'POST', [System.Text.Encoding]::UTF8.GetBytes($env:LA_BODY))
@@ -200,7 +205,10 @@ def _powershell_request(
     if res.returncode != 0 or not res.stdout.strip():
         raise httpx.ConnectError(res.stderr.strip() or f"Error de conexión vía proxy para {url}")
     raw_bytes = base64.b64decode(res.stdout.strip())
-    return SimpleResponse(status_code=200, text=raw_bytes.decode("utf-8", errors="replace"))
+    text = raw_bytes.decode("utf-8", errors="replace")
+    if "Web Application Firewall has denied" in text:
+        raise httpx.ConnectError(f"Bloqueo WAF en {url}")
+    return SimpleResponse(status_code=200, text=text)
 
 
 async def http_get(
@@ -218,6 +226,8 @@ async def http_get(
         async with make_client(timeout=timeout) as client:
             resp = await client.get(full_url)
             resp.raise_for_status()
+            if "Web Application Firewall has denied" in resp.text:
+                raise httpx.ConnectError(f"Bloqueo WAF temporal en {url}")
             return SimpleResponse(status_code=resp.status_code, text=resp.text)
     except (httpx.ConnectError, httpx.ProxyError):
         if sys.platform != "win32":
