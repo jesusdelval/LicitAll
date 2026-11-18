@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LicitAll — Descubrimiento de Licitaciones Públicas</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="header-logo-container" title="Telekom / T-Systems">
+        <svg id="header-logo-svg" class="header-logo-t" viewBox="0 0 124 69" fill="currentColor" aria-hidden="true">
+          <g transform="translate(-162.112, -181.950) scale(0.37534)">
+            <path d="m 709.97094,570.75354 28.82473,0 0,28.82473 -28.82473,0 0,-28.82473 z m -86.46935,0 28.8199,0 0,28.82473 -28.8199,0 0,-28.82473 z m -86.47418,0 28.82473,0 0,28.82473 -28.82473,0 0,-28.82473 z m -18.34804,46.24869 c 0,9.14413 1.33452,15.07963 4.0132,17.81612 2.26435,2.3318 6.12337,3.7675 11.53374,4.30227 1.60433,0.13497 4.35527,0.19734 8.2384,0.19734 l 0,8.01195 -69.453,0 0,-8.01195 c 5.57898,0 9.68853,-0.26479 12.34796,-0.79976 5.38143,-1.13217 8.77315,-4.26854 10.16548,-9.40909 0.72749,-2.66425 1.09846,-6.70153 1.09846,-12.10706 l 0,-104.72395 c -11.78427,0.33263 -21.00065,4.23482 -27.65401,11.71201 -6.32091,7.15437 -10.17513,18.10518 -11.5771,32.85719 l -7.50609,-1.29598 1.39715,-50.08554 112.90929,0 1.40196,50.08554 -7.51573,1.29598 C 556.68195,542.09529 552.794,531.14448 546.449,523.99011 539.76194,516.51292 530.50219,512.61054 518.67937,512.2781 l 0,104.72395 z m -68.6561,-46.24869 28.82473,0 0,28.82473 -28.82473,0 0,-28.82473 z" />
+          </g>
+        </svg>
+      </div>
+      <div class="header-separator" aria-hidden="true"></div>
+      <span class="header-title">PORTAL DE LICITACIONES PÚBLICAS (LicitAll)</span>
+      <div class="header-separator" aria-hidden="true"></div>
+      <nav class="nav-tabs" aria-label="Vistas principales">
+        <button class="nav-tab active" data-view="tenders" id="tab-tenders">Licitaciones</button>
+        <button class="nav-tab" data-view="sources" id="tab-sources">Fuentes y Estado</button>
+      </nav>
+    </div>
+    <div class="header-actions">
+      <span class="header-sync-badge" id="sync-status-text">Listo</span>
+      <div class="sync-range" title="Rango de fechas para descargar al sincronizar">
+        <label for="sync-date-from" class="header-date-label">Desde</label>
+        <input type="date" id="sync-date-from" class="header-date-input" />
+        <label for="sync-date-to" class="header-date-label">Hasta</label>
+        <input type="date" id="sync-date-to" class="header-date-input" />
+      </div>
+      <button class="header-sync-btn" id="btn-sync-all">Sincronizar fuentes</button>
+      <button class="header-exit-btn" id="btn-shutdown" title="Cerrar aplicación y apagar el servidor local" aria-label="Salir">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+          <line x1="12" y1="2" x2="12" y2="12"></line>
+        </svg>
+        <span>Salir</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="layout full-width" id="main-layout">
+    <main class="main-content">
+      <section id="view-tenders">
+        <div class="filters-card">
+          <div class="filters-header">
+            <h2 class="filters-title">Filtrar por:</h2>
+            <div class="saved-filters-wrap" id="saved-filters-bar"></div>
+          </div>
+
+          <form id="form-search" class="filters-grid">
+            <div class="filter-field filter-wide">
+              <label for="filter-q">Texto, palabra clave o expediente</label>
+              <input type="text" id="filter-q" placeholder="Palabras clave, órgano contratante, expediente..." />
+            </div>
+
+            <div class="filter-field">
+              <label>Fuentes (selección múltiple)</label>
+              <div class="multi-select" id="ms-sources">
+                <button type="button" class="multi-select-btn" id="ms-sources-btn">Todas las fuentes</button>
+                <div class="multi-select-menu hidden" id="ms-sources-menu"></div>
+              </div>
+            </div>
+
+            <div class="filter-field">
+              <label>Estados (selección múltiple)</label>
+              <div class="multi-select" id="ms-statuses">
+                <button type="button" class="multi-select-btn" id="ms-statuses-btn">Todos los estados</button>
+                <div class="multi-select-menu hidden" id="ms-statuses-menu"></div>
+              </div>
+            </div>
+
+            <div class="filter-field">
+              <label for="filter-authority">Órgano contratante</label>
+              <input type="text" id="filter-authority" placeholder="Clica en un órgano o escribe..." />
+            </div>
+
+            <div class="filter-field">
+              <label for="filter-date-from">Publicado desde</label>
+              <input type="date" id="filter-date-from" />
+            </div>
+
+            <div class="filter-field">
+              <label for="filter-date-to">Publicado hasta</label>
+              <input type="date" id="filter-date-to" />
+            </div>
+
+            <div class="filter-field">
+              <label for="filter-min-budget">Presupuesto mín. (€)</label>
+              <input type="number" id="filter-min-budget" min="0" step="1000" placeholder="0" />
+            </div>
+
+            <div class="filter-field">
+              <label for="select-common-cpv">Añadir CPV del listado</label>
+              <select id="select-common-cpv">
+                <option value="">Selecciona una familia CPV...</option>
+              </select>
+            </div>
+
+            <div class="filter-field filter-wide">
+              <label for="filter-cpv-input">Códigos CPV seleccionados (escribe y pulsa Añadir o Enter)</label>
+              <div class="input-row">
+                <input type="text" id="filter-cpv-input" placeholder="Ej: 72, 48, 72212000" />
+                <button type="button" class="btn btn-secondary" id="btn-add-cpv-chip">Añadir CPV</button>
+              </div>
+              <div class="cpv-chips-row" id="selected-cpv-chips"></div>
+            </div>
+
+            <div class="filter-actions">
+              <label class="checkbox-inline">
+                <input type="checkbox" id="filter-favorites" />
+                <span>★ Solo favoritas</span>
+              </label>
+              <div class="btn-group">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <button type="button" class="btn btn-secondary" id="btn-open-save-filter">Guardar filtro</button>
+                <button type="button" class="btn btn-ghost" id="btn-clear-filters">Limpiar</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="results-bar">
+          <span id="results-summary">Cargando licitaciones...</span>
+          <div class="results-controls">
+            <label for="filter-sort" class="small-inline-label">Ordenar por:</label>
+            <select id="filter-sort" class="sort-select">
+              <option value="published_desc">Más recientes</option>
+              <option value="budget_desc">Importe: mayor a menor</option>
+              <option value="budget_asc">Importe: menor a mayor</option>
+            </select>
+            <div class="pagination" id="pagination">
+              <button class="btn btn-ghost" id="btn-prev" disabled>Anterior</button>
+              <span id="page-info">Página 1</span>
+              <button class="btn btn-ghost" id="btn-next" disabled>Siguiente</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tenders-list" id="tenders-list"></div>
+      </section>
+
+      <section id="view-sources" class="hidden">
+        <div class="card">
+          <div class="card-header-row">
+            <div>
+              <h2>Fuentes de contratación configuradas</h2>
+              <p class="muted">Conectores de Nivel 1 (PLACSP y TED), Nivel 2 (autonómicas) y Nivel 3 (portales propios).</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="sources-table">
+              <thead>
+                <tr>
+                  <th>Fuente</th>
+                  <th>Prioridad</th>
+                  <th>Formato</th>
+                  <th>Licitaciones</th>
+                  <th>Última sincronización</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="sources-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal de detalle -->
+  <div class="modal-backdrop hidden" id="detail-modal">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <div>
+          <span class="badge badge-source" id="modal-source"></span>
+          <span class="badge badge-status" id="modal-status"></span>
+        </div>
+        <button class="btn btn-ghost" id="btn-close-modal" aria-label="Cerrar detalle">✕</button>
+      </div>
+      <h2 id="modal-title"></h2>
+      <div class="modal-meta" id="modal-meta"></div>
+      <div class="modal-section">
+        <h4>Descripción</h4>
+        <p id="modal-summary"></p>
+      </div>
+      <div class="modal-section">
+        <h4>Códigos CPV</h4>
+        <div class="cpv-tags" id="modal-cpvs"></div>
+      </div>
+      <div class="modal-footer">
+        <a id="modal-url" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+          Abrir en portal oficial
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para guardar filtro -->
+  <div class="modal-backdrop hidden" id="save-filter-modal">
+    <div class="modal-card modal-compact" role="dialog" aria-modal="true" aria-labelledby="save-filter-title">
+      <div class="modal-header">
+        <h3 id="save-filter-title" style="margin:0">Guardar filtro</h3>
+        <button class="btn btn-ghost" id="btn-close-save-modal" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="form-save-filter" class="stack-form" style="margin-top:0.75rem">
+        <label for="input-save-filter-name" class="small-label">Nombre del filtro</label>
+        <input type="text" id="input-save-filter-name" placeholder="Ej: Software y Datos" required maxlength="100" />
+        <div class="modal-footer" style="gap:0.5rem">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-save-filter">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal de confirmación de salida -->
+  <div class="modal-backdrop hidden" id="confirm-modal">
+    <div class="modal-card modal-compact" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="modal-header">
+        <h3 id="confirm-title" style="margin:0">Cerrar LicitAll</h3>
+        <button class="btn btn-ghost" id="btn-cancel-confirm" aria-label="Cancelar">✕</button>
+      </div>
+      <p class="muted" style="margin:0.5rem 0 1.1rem">
+        Se detendrá el servidor local de Python y se cerrará la ventana de LicitAll.
+      </p>
+      <div class="modal-footer" style="gap:0.5rem">
+        <button class="btn btn-secondary" id="btn-cancel-exit">Cancelar</button>
+        <button class="btn btn-danger-ghost" id="btn-confirm-exit">Sí, cerrar LicitAll</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
