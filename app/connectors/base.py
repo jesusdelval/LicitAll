@@ -147,7 +147,7 @@ class SimpleResponse:
     text: str
 
     def json(self) -> Any:
-        return json.loads(self.text)
+        return json.loads(self.text.lstrip("\ufeff"))
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:

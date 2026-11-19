@@ -50,8 +50,9 @@ function formatDateTime(isoStr) {
   });
 }
 
-function todayLocalIso() {
+function todayLocalIso(offsetDays = 0) {
   const now = new Date();
+  now.setDate(now.getDate() + offsetDays);
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
@@ -744,9 +745,8 @@ function wireEvents() {
 }
 
 async function init() {
-  const today = todayLocalIso();
-  $("sync-date-from").value = today;
-  $("sync-date-to").value = today;
+  $("sync-date-from").value = todayLocalIso(-2);
+  $("sync-date-to").value = todayLocalIso(0);
   wireEvents();
   await Promise.all([loadCpvCatalog(), loadSavedFilters(), loadSources(), loadStatuses()]);
   await loadTenders();
